@@ -1,0 +1,9 @@
+body { background: #0b0e11; color: #e9edef; font-family: sans-serif; display: flex; justify-content: center; padding: 40px 20px; }
+.container { background: #151921; padding: 30px; border-radius: 12px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.admin-wide { max-width: 600px; }
+h1 { color: #f0b90b; }
+input { width: 100%; padding: 12px; margin: 8px 0; background: #2b2f36; border: 1px solid #474d57; color: white; border-radius: 6px; box-sizing: border-box; }
+button { width: 100%; padding: 14px; background: #f0b90b; color: black; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+.card, .order-card { background: #2b2f36; padding: 15px; border-radius: 8px; margin-top: 10px; cursor: pointer; border: 1px solid transparent; }
+.card:hover { border-color: #f0b90b; }
+.order-card { text-align: left; border-left: 4px solid #f0b90b; cursor: default; }
