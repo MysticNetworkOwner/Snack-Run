@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Select Snacks - NASAD</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadItems()">
+    <div class="container">
+        <h1>Available Snacks</h1>
+        <div id="itemList">Loading snacks...</div>
+        <button id="orderBtn" style="display:none;" onclick="submitOrder()">Confirm Order</button>
+    </div>
+    <script>
+        const API_URL = "https://api.underhost.org";
+        let selectedItem = "";
+
+        async function loadItems() {
+            try {
+                const res = await fetch(`${API_URL}/inventory`);
+                const items = await res.json();
+                const list = document.getElementById('itemList');
+                list.innerHTML = items.length ? items.map(item => `
+                    <div class="card" onclick="selectItem('${item.name}')">
+                        <strong>${item.name}</strong><br>
+                        <span style="color:${item.stock < 5 ? '#ff4b4b' : '#848e9c'}">Stock: ${item.stock}</span>
+                    </div>
+                `).join('') : "<p>No snacks available right now.</p>";
+            } catch (e) { document.getElementById('itemList').innerText = "Error connecting to server."; }
+        }
+
+        function selectItem(name) {
+            selectedItem = name;
+            document.getElementById('orderBtn').style.display = "block";
+        }
+
+        async function submitOrder() {
+            const customer = JSON.parse(localStorage.getItem('customer'));
+            const res = await fetch(`${API_URL}/order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...customer, item: selectedItem })
+            });
+            if (res.ok) {
+                alert("Order Sent! Wait for delivery.");
+                window.location.href = "index.html";
+            }
+        }
+    </script>
+</body>
+</html>
