@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - NASAD</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="adminLogin()">
+    <div id="adminPanel" style="display:none;" class="container admin-wide">
+        <h1>NASAD Admin Portal</h1>
+        <div class="section">
+            <h2>Active Orders</h2>
+            <div id="orderLog"></div>
+        </div>
+        <hr>
+        <div class="section">
+            <h2>Manage Stock</h2>
+            <input type="text" id="itemName" placeholder="Item Name">
+            <input type="number" id="itemStock" placeholder="Quantity">
+            <button onclick="updateInventory()">Update Stock</button>
+        </div>
+    </div>
+    <script>
+        const API_URL = "https://api.underhost.org";
+        let auth = {};
+
+        async function adminLogin() {
+            auth = { user: prompt("Username:"), pass: prompt("Password:") };
+            const res = await fetch(`${API_URL}/admin/data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(auth)
+            });
+            if (res.ok) {
+                document.getElementById('adminPanel').style.display = "block";
+                const data = await res.json();
+                document.getElementById('orderLog').innerHTML = data.orders.map(o => `
+                    <div class="order-card">
+                        <strong>${o.name}</strong>: ${o.item}<br>
+                        <small>${o.location} | ${o.contact}</small>
+                    </div>
+                `).join('');
+            } else { window.location.href = "index.html"; }
+        }
+
+        async function updateInventory() {
+            await fetch(`${API_URL}/admin/update_stock`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...auth, name: document.getElementById('itemName').value, stock: parseInt(document.getElementById('itemStock').value) })
+            });
+            location.reload();
+        }
+    </script>
+</body>
+</html>
