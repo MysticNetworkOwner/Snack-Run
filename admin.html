@@ -8,48 +8,84 @@
 <body onload="adminLogin()">
     <div id="adminPanel" style="display:none;" class="container admin-wide">
         <h1>NASAD Admin Portal</h1>
+        
         <div class="section">
             <h2>Active Orders</h2>
-            <div id="orderLog"></div>
+            <div id="orderLog">Loading orders...</div>
         </div>
+
         <hr>
+
         <div class="section">
             <h2>Manage Stock</h2>
-            <input type="text" id="itemName" placeholder="Item Name">
+            <input type="text" id="itemName" placeholder="Item Name (e.g. Takis)">
             <input type="number" id="itemStock" placeholder="Quantity">
             <button onclick="updateInventory()">Update Stock</button>
+            <div id="currentInvDisplay" style="margin-top:10px; font-size: 0.9rem; color: #848e9c;"></div>
         </div>
+        
+        <button class="secondary-btn" onclick="window.location.href='index.html'">Back to Shop</button>
     </div>
+
     <script>
         const API_URL = "https://api.underhost.org";
         let auth = {};
 
         async function adminLogin() {
-            auth = { user: prompt("Username:"), pass: prompt("Password:") };
-            const res = await fetch(`${API_URL}/admin/data`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(auth)
-            });
-            if (res.ok) {
-                document.getElementById('adminPanel').style.display = "block";
-                const data = await res.json();
-                document.getElementById('orderLog').innerHTML = data.orders.map(o => `
-                    <div class="order-card">
-                        <strong>${o.name}</strong>: ${o.item}<br>
-                        <small>${o.location} | ${o.contact}</small>
-                    </div>
-                `).join('');
-            } else { window.location.href = "index.html"; }
+            const u = prompt("Username:");
+            const p = prompt("Password:");
+            auth = { user: u, pass: p };
+
+            try {
+                const res = await fetch(`${API_URL}/admin/data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(auth)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('adminPanel').style.display = "block";
+                    renderAdmin(data);
+                } else {
+                    alert("Login Failed. Check credentials in server.py");
+                    window.location.href = "index.html";
+                }
+            } catch (e) {
+                alert("Cannot connect to VPS. Is the Cloudflare Tunnel running?");
+            }
+        }
+
+        function renderAdmin(data) {
+            // Render Orders
+            const log = document.getElementById('orderLog');
+            log.innerHTML = data.orders.length ? data.orders.map(o => `
+                <div class="order-card">
+                    <strong>${o.name}</strong> bought <strong>${o.item}</strong><br>
+                    <small>📍 ${o.location} | 💬 ${o.contact}</small>
+                </div>
+            `).join('') : "No orders found.";
+
+            // Render Inventory
+            const inv = document.getElementById('currentInvDisplay');
+            inv.innerHTML = "Current Inventory:<br>" + 
+                (data.inventory.length ? data.inventory.map(i => `${i.name}: ${i.stock}`).join(' | ') : "Empty");
         }
 
         async function updateInventory() {
-            await fetch(`${API_URL}/admin/update_stock`, {
+            const name = document.getElementById('itemName').value;
+            const stock = parseInt(document.getElementById('itemStock').value);
+            
+            const res = await fetch(`${API_URL}/admin/update_stock`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...auth, name: document.getElementById('itemName').value, stock: parseInt(document.getElementById('itemStock').value) })
+                body: JSON.stringify({ ...auth, name, stock })
             });
-            location.reload();
+
+            if (res.ok) {
+                alert("Inventory Updated!");
+                location.reload();
+            }
         }
     </script>
 </body>
