@@ -8,9 +8,15 @@
 <body onload="loadItems()">
     <div class="container">
         <h1>Available Snacks</h1>
-        <div id="itemList">Loading snacks...</div>
+        <div id="itemList">Checking the pantry...</div>
+        
         <button id="orderBtn" style="display:none;" onclick="submitOrder()">Confirm Order</button>
+        
+        <hr>
+        <!-- The new Staff Login Button -->
+        <button class="secondary-btn" onclick="window.location.href='admin.html'">Staff Login</button>
     </div>
+
     <script>
         const API_URL = "https://api.underhost.org";
         let selectedItem = "";
@@ -18,15 +24,24 @@
         async function loadItems() {
             try {
                 const res = await fetch(`${API_URL}/inventory`);
+                if (!res.ok) throw new Error("Server response not OK");
+                
                 const items = await res.json();
                 const list = document.getElementById('itemList');
-                list.innerHTML = items.length ? items.map(item => `
-                    <div class="card" onclick="selectItem('${item.name}')">
-                        <strong>${item.name}</strong><br>
-                        <span style="color:${item.stock < 5 ? '#ff4b4b' : '#848e9c'}">Stock: ${item.stock}</span>
-                    </div>
-                `).join('') : "<p>No snacks available right now.</p>";
-            } catch (e) { document.getElementById('itemList').innerText = "Error connecting to server."; }
+                
+                if (items.length === 0) {
+                    list.innerHTML = "<p>Out of stock! Check back later.</p>";
+                } else {
+                    list.innerHTML = items.map(item => `
+                        <div class="card" onclick="selectItem('${item.name}')">
+                            <strong>${item.name}</strong><br>
+                            <span style="color:${item.stock < 5 ? '#ff4b4b' : '#848e9c'}">Stock: ${item.stock}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                document.getElementById('itemList').innerHTML = `<p style="color:red">Backend Offline<br><small>${e.message}</small></p>`;
+            }
         }
 
         function selectItem(name) {
