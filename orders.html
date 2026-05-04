@@ -8,37 +8,55 @@
 <body onload="loadItems()">
     <div class="container">
         <h1>NASAD Shop</h1>
+        <p id="loadingMsg">Loading snacks...</p>
         <div id="itemList" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"></div>
         
-        <div id="cartSection" class="section" style="display:none; margin-top:30px; border-top: 1px solid #474d57;">
+        <div id="cartSection" class="section" style="display:none; margin-top:30px; border-top: 1px solid #474d57; padding-top: 15px;">
             <h3>Your Cart</h3>
             <div id="cartItems"></div>
             <p><strong>Total: <span id="cartTotal">0</span> AED</strong></p>
-            <button onclick="submitOrder()">Place Order & Pay at Lunch</button>
+            <button onclick="submitOrder()" id="orderBtn">Place Order & Pay at Lunch</button>
         </div>
     </div>
 
     <script>
         const API_URL = "https://api.underhost.org";
         let cart = [];
+        let inventoryData = []; // Store stock levels locally for checking
 
         async function loadItems() {
-            const res = await fetch(`${API_URL}/inventory`);
-            const items = await res.json();
-            const list = document.getElementById('itemList');
-            list.innerHTML = items.map(i => `
-                <div class="card">
-                    <strong>${i.name}</strong><br>
-                    ${i.price} AED<br>
-                    <small>Stock: ${i.stock}</small><br>
-                    <button onclick="addToCart('${i.name}', ${i.price})" ${i.stock <= 0 ? 'disabled' : ''}>
-                        ${i.stock <= 0 ? 'Out of Stock' : 'Add to Cart'}
-                    </button>
-                </div>
-            `).join('');
+            try {
+                const res = await fetch(`${API_URL}/inventory`);
+                inventoryData = await res.json();
+                document.getElementById('loadingMsg').style.display = "none";
+                
+                const list = document.getElementById('itemList');
+                list.innerHTML = inventoryData.map(i => `
+                    <div class="card">
+                        <strong>${i.name}</strong><br>
+                        ${i.price} AED<br>
+                        <small>Stock: ${i.stock}</small><br>
+                        <button onclick="addToCart('${i.name}', ${i.price})" ${i.stock <= 0 ? 'disabled' : ''}>
+                            ${i.stock <= 0 ? 'Out of Stock' : 'Add to Cart'}
+                        </button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('loadingMsg').innerText = "Failed to load snacks. Is the server live?";
+            }
         }
 
         function addToCart(name, price) {
+            // Find the item in our loaded inventory
+            const item = inventoryData.find(i => i.name === name);
+            // Count how many are already in the cart
+            const inCart = cart.filter(c => c.name === name).length;
+
+            if (inCart >= item.stock) {
+                alert(`Sorry, we only have ${item.stock} of these available!`);
+                return;
+            }
+
             cart.push({name, price});
             document.getElementById('cartSection').style.display = "block";
             updateCartUI();
@@ -47,30 +65,59 @@
         function updateCartUI() {
             const itemsDiv = document.getElementById('cartItems');
             itemsDiv.innerHTML = cart.map((item, idx) => `
-                <div style="font-size:0.9rem; margin-bottom:5px;">
-                    ${item.name} - ${item.price} AED 
-                    <span onclick="cart.splice(${idx},1); updateCartUI();" style="color:red; cursor:pointer;">[x]</span>
+                <div style="font-size:0.9rem; margin-bottom:5px; display:flex; justify-content:space-between;">
+                    <span>${item.name} - ${item.price} AED</span>
+                    <span onclick="cart.splice(${idx},1); updateCartUI();" style="color:#ff4b4b; cursor:pointer; font-weight:bold;">[Remove]</span>
                 </div>
             `).join('');
+            
             const total = cart.reduce((sum, i) => sum + i.price, 0);
             document.getElementById('cartTotal').innerText = total;
+            
             if(cart.length === 0) document.getElementById('cartSection').style.display = "none";
         }
 
         async function submitOrder() {
             const customer = JSON.parse(localStorage.getItem('customer'));
-            const total = document.getElementById('cartTotal').innerText;
+            if (!customer) {
+                alert("Session error. Please go back to the home page and enter your name.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            const btn = document.getElementById('orderBtn');
+            btn.disabled = true; // Prevent double-clicking
+            btn.innerText = "Processing...";
+
             const itemString = cart.map(i => i.name).join(", ");
+            const total = document.getElementById('cartTotal').innerText;
 
-            const res = await fetch(`${API_URL}/order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...customer, item: itemString, total: total })
-            });
+            try {
+                const res = await fetch(`${API_URL}/order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name: customer.name, 
+                        location: customer.location, 
+                        item: itemString, 
+                        total: total 
+                    })
+                });
 
-            if (res.ok) {
-                localStorage.setItem('lastTotal', total);
-                window.location.href = "thanks.html";
+                const data = await res.json();
+
+                if (res.ok) {
+                    localStorage.setItem('lastTotal', total);
+                    window.location.href = "thanks.html";
+                } else {
+                    // This handles the "Out of Stock" error from the Python script
+                    alert("Order Failed: " + (data.error || "Unknown Error"));
+                    location.reload(); // Refresh to show current stock
+                }
+            } catch (e) {
+                alert("Connection error. Is the server running?");
+                btn.disabled = false;
+                btn.innerText = "Place Order & Pay at Lunch";
             }
         }
     </script>
