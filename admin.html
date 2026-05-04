@@ -5,7 +5,7 @@
     <title>Admin - NASAD</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="checkStatus()">
+<body onload="checkLogin()">
     <div id="loginBox" class="container">
         <h1>Staff Login</h1>
         <input type="text" id="user" placeholder="User">
@@ -14,15 +14,22 @@
     </div>
 
     <div id="adminPanel" class="container admin-wide" style="display:none;">
-        <h1>Active Orders</h1>
+        <div style="display:flex; justify-content: space-between;">
+            <h1>Admin Panel</h1>
+            <button onclick="logout()" style="width:auto; background:#ff4b4b;">Logout</button>
+        </div>
+
+        <h2>Active Orders</h2>
         <div id="activeOrders"></div>
 
         <hr>
         <h2>Inventory Management</h2>
-        <input type="text" id="itemName" placeholder="Item Name">
-        <input type="number" id="itemPrice" placeholder="Price">
-        <input type="number" id="itemStock" placeholder="Stock">
-        <button onclick="updateStock()">Update / Add Item</button>
+        <div id="form">
+            <input type="text" id="itemName" placeholder="Item Name">
+            <input type="number" id="itemPrice" placeholder="Price">
+            <input type="number" id="itemStock" placeholder="Stock">
+            <button onclick="updateStock()">Update / Add Item</button>
+        </div>
         <div id="inventoryList" style="margin-top:20px;"></div>
 
         <hr>
@@ -32,39 +39,95 @@
 
     <script>
         const API_URL = "https://api.underhost.org";
-        let auth = {};
+        let auth = null;
+
+        // CHECK IF ALREADY LOGGED IN
+        function checkLogin() {
+            const saved = localStorage.getItem('nasad_admin');
+            if (saved) {
+                auth = JSON.parse(saved);
+                document.getElementById('loginBox').style.display = "none";
+                document.getElementById('adminPanel').style.display = "block";
+                refreshData();
+            }
+        }
 
         async function login() {
-            auth = { user: document.getElementById('user').value, pass: document.getElementById('pass').value };
+            const u = document.getElementById('user').value;
+            const p = document.getElementById('pass').value;
+            auth = { user: u, pass: p };
+            
             const res = await fetch(`${API_URL}/admin/data`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(auth)
             });
+
             if (res.ok) {
+                localStorage.setItem('nasad_admin', JSON.stringify(auth));
                 document.getElementById('loginBox').style.display = "none";
                 document.getElementById('adminPanel').style.display = "block";
                 render(await res.json());
-            } else { alert("Wrong credentials"); }
+            } else { alert("Invalid Login"); }
+        }
+
+        async function refreshData() {
+            const res = await fetch(`${API_URL}/admin/data`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(auth)
+            });
+            if (res.ok) render(await res.json());
         }
 
         function render(data) {
             document.getElementById('activeOrders').innerHTML = data.orders.map((o, i) => `
                 <div class="order-card" style="display:flex; justify-content:space-between;">
-                    <div><strong>${o.name}</strong> (${o.location})<br>${o.item}<br>Total: ${o.total} AED</div>
+                    <div><strong>${o.name}</strong><br>${o.item}<br>${o.total} AED</div>
                     <button onclick="complete(${i})" style="width:auto; background:#4ade80;">Complete</button>
                 </div>
             `).reverse().join('');
 
             document.getElementById('inventoryList').innerHTML = data.inventory.map(i => `
-                <div class="order-card" style="display:flex; justify-content:space-between;">
-                    <div>${i.name} - ${i.price} AED (Stock: ${i.stock})</div>
-                    <button onclick="fill('${i.name}', ${i.price}, ${i.stock})" style="width:auto;">Edit</button>
+                <div class="order-card" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong>${i.name}</strong> - ${i.price} AED (Stock: ${i.stock})</div>
+                    <div>
+                        <button onclick="fill('${i.name}', ${i.price}, ${i.stock})" style="width:auto;">Edit</button>
+                        <button onclick="deleteItem('${i.name}')" style="width:auto; background:#ff4b4b;">Delete</button>
+                    </div>
                 </div>
             `).join('');
 
             document.getElementById('completedOrders').innerHTML = data.completed_orders.map(o => `
-                <div>${o.name} bought ${o.item} - ${o.total} AED</div>
+                <div>${o.name} - ${o.item} (${o.total} AED)</div>
             `).reverse().join('');
+        }
+
+        async function updateStock() {
+            await fetch(`${API_URL}/admin/update_stock`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ...auth, 
+                    name: document.getElementById('itemName').value, 
+                    price: document.getElementById('itemPrice').value, 
+                    stock: document.getElementById('itemStock').value 
+                })
+            });
+            refreshData(); // REFRESH WITHOUT LOGOUT
+        }
+
+        async function deleteItem(name) {
+            if(!confirm(`Delete ${name} permanently?`)) return;
+            await fetch(`${API_URL}/admin/delete_item`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ...auth, name: name })
+            });
+            refreshData();
+        }
+
+        async function complete(idx) {
+            await fetch(`${API_URL}/admin/complete_order`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ...auth, index: idx })
+            });
+            refreshData();
         }
 
         function fill(n, p, s) {
@@ -73,22 +136,8 @@
             document.getElementById('itemStock').value = s;
         }
 
-        async function updateStock() {
-            const name = document.getElementById('itemName').value;
-            const price = document.getElementById('itemPrice').value;
-            const stock = document.getElementById('itemStock').value;
-            await fetch(`${API_URL}/admin/update_stock`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ ...auth, name, price, stock })
-            });
-            location.reload();
-        }
-
-        async function complete(idx) {
-            await fetch(`${API_URL}/admin/complete_order`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ ...auth, index: idx })
-            });
+        function logout() {
+            localStorage.removeItem('nasad_admin');
             location.reload();
         }
     </script>
