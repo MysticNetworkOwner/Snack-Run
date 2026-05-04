@@ -2,109 +2,93 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Portal - NASAD</title>
+    <title>Admin - NASAD</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <!-- Login Form (Shown by default) -->
-    <div id="loginSection" class="container">
-        <h1>Admin Login</h1>
-        <p>Enter staff credentials</p>
-        <input type="text" id="userField" placeholder="Username">
-        <input type="password" id="passField" placeholder="Password">
-        <button onclick="attemptLogin()">Login</button>
-        <button class="secondary-btn" onclick="window.location.href='index.html'">Back to Shop</button>
+<body onload="checkStatus()">
+    <div id="loginBox" class="container">
+        <h1>Staff Login</h1>
+        <input type="text" id="user" placeholder="User">
+        <input type="password" id="pass" placeholder="Pass">
+        <button onclick="login()">Login</button>
     </div>
 
-    <!-- Dashboard (Hidden until login) -->
-    <div id="adminPanel" style="display:none;" class="container admin-wide">
-        <h1>NASAD Management</h1>
-        
-        <div class="section">
-            <h2>Active Orders</h2>
-            <div id="orderLog">Loading orders...</div>
-        </div>
+    <div id="adminPanel" class="container admin-wide" style="display:none;">
+        <h1>Active Orders</h1>
+        <div id="activeOrders"></div>
 
         <hr>
+        <h2>Inventory Management</h2>
+        <input type="text" id="itemName" placeholder="Item Name">
+        <input type="number" id="itemPrice" placeholder="Price">
+        <input type="number" id="itemStock" placeholder="Stock">
+        <button onclick="updateStock()">Update / Add Item</button>
+        <div id="inventoryList" style="margin-top:20px;"></div>
 
-        <div class="section">
-            <h2>Manage Stock</h2>
-            <input type="text" id="itemName" placeholder="Item Name">
-            <input type="number" id="itemStock" placeholder="Quantity">
-            <button onclick="updateInventory()">Update Stock</button>
-            <div id="currentInvDisplay" style="margin-top:15px; color: #848e9c;"></div>
-        </div>
-        
-        <button class="secondary-btn" onclick="logout()">Logout</button>
+        <hr>
+        <h2>Completed Orders</h2>
+        <div id="completedOrders" style="opacity:0.6;"></div>
     </div>
 
     <script>
         const API_URL = "https://api.underhost.org";
         let auth = {};
 
-        async function attemptLogin() {
-            const u = document.getElementById('userField').value;
-            const p = document.getElementById('passField').value;
-            auth = { user: u, pass: p };
-
-            try {
-                const res = await fetch(`${API_URL}/admin/data`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(auth)
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    // Hide login, show dashboard
-                    document.getElementById('loginSection').style.display = "none";
-                    document.getElementById('adminPanel').style.display = "block";
-                    renderAdmin(data);
-                } else {
-                    alert("Invalid Username or Password");
-                }
-            } catch (e) {
-                alert("Error: Cannot reach backend.");
-            }
-        }
-
-        function renderAdmin(data) {
-            const log = document.getElementById('orderLog');
-            log.innerHTML = data.orders.length ? data.orders.map(o => `
-                <div class="order-card">
-                    <strong>${o.name}</strong> wants <strong>${o.item}</strong><br>
-                    <small>📍 ${o.location} | 💬 ${o.contact}</small>
-                </div>
-            `).sort().reverse().join('') : "No orders yet.";
-
-            const inv = document.getElementById('currentInvDisplay');
-            inv.innerHTML = "Current Stock: " + 
-                (data.inventory.length ? data.inventory.map(i => `${i.name} (${i.stock})`).join(' | ') : "Empty");
-        }
-
-        async function updateInventory() {
-            const name = document.getElementById('itemName').value;
-            const stock = parseInt(document.getElementById('itemStock').value);
-            
-            const res = await fetch(`${API_URL}/admin/update_stock`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...auth, name, stock })
+        async function login() {
+            auth = { user: document.getElementById('user').value, pass: document.getElementById('pass').value };
+            const res = await fetch(`${API_URL}/admin/data`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(auth)
             });
-
             if (res.ok) {
-                alert("Stock Updated!");
-                // Refresh data without full page reload
-                const refresh = await fetch(`${API_URL}/admin/data`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(auth)
-                });
-                renderAdmin(await refresh.json());
-            }
+                document.getElementById('loginBox').style.display = "none";
+                document.getElementById('adminPanel').style.display = "block";
+                render(await res.json());
+            } else { alert("Wrong credentials"); }
         }
 
-        function logout() {
+        function render(data) {
+            document.getElementById('activeOrders').innerHTML = data.orders.map((o, i) => `
+                <div class="order-card" style="display:flex; justify-content:space-between;">
+                    <div><strong>${o.name}</strong> (${o.location})<br>${o.item}<br>Total: ${o.total} AED</div>
+                    <button onclick="complete(${i})" style="width:auto; background:#4ade80;">Complete</button>
+                </div>
+            `).reverse().join('');
+
+            document.getElementById('inventoryList').innerHTML = data.inventory.map(i => `
+                <div class="order-card" style="display:flex; justify-content:space-between;">
+                    <div>${i.name} - ${i.price} AED (Stock: ${i.stock})</div>
+                    <button onclick="fill('${i.name}', ${i.price}, ${i.stock})" style="width:auto;">Edit</button>
+                </div>
+            `).join('');
+
+            document.getElementById('completedOrders').innerHTML = data.completed_orders.map(o => `
+                <div>${o.name} bought ${o.item} - ${o.total} AED</div>
+            `).reverse().join('');
+        }
+
+        function fill(n, p, s) {
+            document.getElementById('itemName').value = n;
+            document.getElementById('itemPrice').value = p;
+            document.getElementById('itemStock').value = s;
+        }
+
+        async function updateStock() {
+            const name = document.getElementById('itemName').value;
+            const price = document.getElementById('itemPrice').value;
+            const stock = document.getElementById('itemStock').value;
+            await fetch(`${API_URL}/admin/update_stock`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ...auth, name, price, stock })
+            });
+            location.reload();
+        }
+
+        async function complete(idx) {
+            await fetch(`${API_URL}/admin/complete_order`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ...auth, index: idx })
+            });
             location.reload();
         }
     </script>
